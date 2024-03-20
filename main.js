@@ -5,11 +5,14 @@ const fse = require('fs-extra');
 const MDL = require('source-mdl');
 const path = require('path');
 const prompt = require('prompt');
-const fetch = require('node-fetch'); // Added missing require
+const fetch = require('node-fetch');
 const { version } = require('./package.json');
 const latestURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/package.json";
 const TextureGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/Getters/TextureGetter.txt";
 const SoundGettersURL = "https://raw.githubusercontent.com/SpySpaille/MapScraper/main/Getters/SoundGetter.txt";
+
+let TextureGettersCache;
+let SoundGettersCache;
 
 const colors = require('@colors/colors');
 const figlet = require('figlet');
@@ -31,8 +34,16 @@ function waitForExit() {
 }
 
 async function setup() {
-    const response = await fetch(latestURL);
-    const json = await response.json();
+    const latestResponse = await fetch(latestURL);
+    const latestJSON = await latestResponse.json();
+
+    const texturesResponse = await fetch(TextureGettersURL);
+    const texturesText = await texturesResponse.text();
+    TextureGettersCache = texturesText.split('\n').map(line => line.trim());
+
+    const soundsResponse = await fetch(SoundGettersURL);
+    const soundsText = await soundsResponse.text();
+    SoundGettersCache = soundsText.split('\n').map(line => line.trim());
 
     prompt.message = '\x1b[90m-';
     prompt.delimiter = ' ';
@@ -43,10 +54,10 @@ async function setup() {
         console.log(colors.green(data));
         console.log(`\x1b[90mMade by \x1b[37mSpySpaille \x1b[90mwith ❤️`);
 
-        if (json.version === version) {
+        if (latestJSON.version === version) {
             console.log(`\x1b[90m-\x1b[32m Version: \x1b[37m${version}\n`);
         } else {
-            console.log(`\x1b[90m-\x1b[32m Version: \x1b[37m${version}\x1b[31m (Outdated)\n\x1b[90m-\x1b[32m Latest Version: \x1b[37m${json.version} \x1b[90m(https://github.com/SpySpaille/MapScraper)\n`);
+            console.log(`\x1b[90m-\x1b[32m Version: \x1b[37m${version}\x1b[31m (Outdated)\n\x1b[90m-\x1b[32m Latest Version: \x1b[37m${latestJSON.version} \x1b[90m(https://github.com/SpySpaille/MapScraper)\n`);
         }
 
         console.log(`📜 Please enter the following information`);
@@ -117,7 +128,7 @@ async function script(gamepath, file, matbool, mdlbool, soundbool) {
     }
 }
 
-// Fonction pour afficher l'indicateur de chargement
+// Loading indicator
 const loadingChars = ['|', '/', '-', '\\'];
 function showLoadingIndicator(message) {
     let loadingIndex = 0;
@@ -132,10 +143,6 @@ function showLoadingIndicator(message) {
 // Get VTFs from materials
 async function VTFfromVMT(gamepath, sourcePath, outputDir) {
     try {
-        const response = await fetch(TextureGettersURL);
-        const text = await response.text();
-        const TextureGetters = text.split('\n').map(line => line.trim());
-
         let textures = [];
         let materialContent;
 
@@ -145,7 +152,7 @@ async function VTFfromVMT(gamepath, sourcePath, outputDir) {
             return;
         }
 
-        TextureGetters.forEach(getter => {
+        TextureGettersCache.forEach(getter => {
             if (materialContent.includes(getter)) {
                 const regex = new RegExp(`\\${getter} \\s*([^\\s]+)`, 'g');
                 let match;
@@ -219,7 +226,7 @@ async function getMaterials(gamepath, vmfContent, outputDir) {
         }
     }
     clearInterval(loadingInterval);
-    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Efface complètement la ligne
+    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Remove the line
     console.log(`\n✅ \x1b[32m${materials.length} \x1b[37mmaterials have been extracted to the output folder\x1b[0m`);
 }
 
@@ -275,15 +282,12 @@ async function getModels(gamepath, vmfContent, outputDir) {
         }
     }
     clearInterval(loadingInterval);
-    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Efface complètement la ligne
+    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Remove the line
     console.log(`\n✅ \x1b[32m${models.length} \x1b[37mmaterials have been extracted to the output folder\x1b[0m`);
 }
 
 async function getSounds(gamepath, vmfContent, outputDir, file) {
     const loadingInterval = showLoadingIndicator('Extracting sounds');
-    const response = await fetch(SoundGettersURL);
-    const text = await response.text();
-    const SoundGetters = text.split('\n').map(line => line.trim());
 
     if (vmfContent.includes('soundscape')) {
         const filename = `soundscapes_${file.split('\\').pop().split('/').pop().replace('.vmf', '.txt')}`
@@ -299,7 +303,7 @@ async function getSounds(gamepath, vmfContent, outputDir, file) {
 
     let sounds = [];
 
-    for (const getter of SoundGetters) {
+    for (const getter of SoundGettersCache) {
         const regex = new RegExp(`\\"${getter}\\"\\s*\\"([^"]+)\\"`, 'g');
         let match;
 
@@ -324,7 +328,7 @@ async function getSounds(gamepath, vmfContent, outputDir, file) {
     }
 
     clearInterval(loadingInterval);
-    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`); // Efface complètement la ligne
+    process.stdout.write(`\r\x1b[90m${' '.repeat(50)}\r`);
     console.log(`\n✅ \x1b[32m${sounds.length} \x1b[37msounds have been extracted to the output folder.\x1b[0m`);
 }
 
